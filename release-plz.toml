@@ -1,0 +1,9 @@
+[workspace]
+# Maintain CHANGELOG.md from conventional commits.
+changelog_update = true
+# Tag (v{version}) and create the GitHub release after publishing.
+git_tag_enable = true
+git_release_enable = true
+# Run cargo-semver-checks and flag accidental breaking changes in the
+# release PR, so patch/minor bumps can't silently break the API.
+semver_check = true
