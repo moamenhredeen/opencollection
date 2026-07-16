@@ -1,0 +1,532 @@
+opencollection: 1.0.0
+bundled: true
+info:
+  name: Kitchen Sink
+  summary: Exercises every construct of the OpenCollection v1.0.0 schema
+  version: 2.3.1
+  authors:
+    - name: Moamen Hraden
+      email: moamenhredeen@gmail.com
+      url: https://example.com
+docs:
+  content: "# Kitchen Sink\nCollection-level documentation."
+  type: text/markdown
+config:
+  environments:
+    - name: local
+      color: "#00ff00"
+      description: Local development
+      variables:
+        - name: baseUrl
+          value: http://localhost:3000
+        - name: mode
+          value:
+            - title: verbose
+              selected: true
+              value: "1"
+            - title: quiet
+              value:
+                type: number
+                data: "0"
+        - secret: true
+          name: apiKey
+          type: string
+          description: API key kept out of the file
+      dotEnvFilePath: .env.local
+    - name: prod
+      extends: local
+      variables:
+        - name: baseUrl
+          value: https://api.example.com
+          disabled: false
+      clientCertificates:
+        - type: pkcs12
+          domain: api.example.com
+          pkcs12FilePath: certs/client.p12
+          passphrase: hunter2
+  protobuf:
+    protoFiles:
+      - type: file
+        path: protos/pets.proto
+    importPaths:
+      - path: protos
+      - path: vendor/protos
+        disabled: true
+  proxy:
+    disabled: false
+    inherit: false
+    config:
+      protocol: http
+      hostname: proxy.local
+      port: 8080
+      auth:
+        disabled: false
+        username: proxyuser
+        password: proxypass
+      bypassProxy: localhost,127.0.0.1
+  clientCertificates:
+    - type: pem
+      domain: example.com
+      certificateFilePath: certs/cert.pem
+      privateKeyFilePath: certs/key.pem
+      passphrase: secret
+request:
+  headers:
+    - name: X-Collection
+      value: kitchen-sink
+      description: sent with every request
+  metadata:
+    - name: x-trace
+      value: enabled
+  auth:
+    type: oauth2
+    flow: client_credentials
+    accessTokenUrl: https://auth.example.com/token
+    refreshTokenUrl: https://auth.example.com/refresh
+    credentials:
+      clientId: my-client
+      clientSecret: my-secret
+      placement: basic_auth_header
+    scope: read write
+    additionalParameters:
+      accessTokenRequest:
+        - name: audience
+          value: https://api.example.com
+          placement: body
+      refreshTokenRequest:
+        - name: hint
+          value: refresh
+          placement: query
+    tokenConfig:
+      id: main-token
+      placement:
+        header: Authorization
+      source: access_token
+    settings:
+      autoFetchToken: true
+      autoRefreshToken: true
+  variables:
+    - name: collectionVar
+      value: shared
+      description:
+        content: a collection level variable
+        type: text/plain
+  scripts:
+    - type: before-request
+      code: console.log("collection before");
+    - type: hooks
+      code: console.log("hooks");
+  settings:
+    http:
+      encodeUrl: true
+      timeout: 30000
+      followRedirects: inherit
+      maxRedirects: 5
+    graphql:
+      timeout: inherit
+items:
+  - info:
+      name: List pets
+      type: http
+      seq: 1
+      tags:
+        - pets
+        - smoke
+      description: Lists pets with pagination
+    http:
+      method: GET
+      url: "{{baseUrl}}/pets"
+      headers:
+        - name: Accept
+          value: application/json
+        - name: X-Debug
+          value: "1"
+          disabled: true
+      params:
+        - name: limit
+          value: "10"
+          type: query
+        - name: ownerId
+          value: "42"
+          type: path
+          description: the owner
+      auth: inherit
+    runtime:
+      variables:
+        - name: requestVar
+          value: local
+      scripts:
+        - type: after-response
+          code: console.log(res.status);
+      assertions:
+        - expression: res.status
+          operator: eq
+          value: "200"
+        - expression: res.body.pets
+          operator: isDefined
+          disabled: true
+      actions:
+        - type: set-variable
+          phase: after-response
+          selector:
+            expression: $.pets[0].id
+            method: jsonq
+          variable:
+            name: firstPetId
+            scope: collection
+    settings:
+      timeout: 5000
+      encodeUrl: inherit
+    examples:
+      - name: happy path
+        description: a typical response
+        request:
+          url: https://api.example.com/pets?limit=10
+          method: GET
+          headers:
+            - name: Accept
+              value: application/json
+          params:
+            - name: limit
+              value: "10"
+              type: query
+          body:
+            type: json
+            data: "{}"
+        response:
+          status: 200
+          statusText: OK
+          headers:
+            - name: Content-Type
+              value: application/json
+          body:
+            type: json
+            data: '{"pets": []}'
+    docs: Fetches all the pets.
+  - info:
+      name: Create pet
+      type: http
+      seq: 2
+    http:
+      method: POST
+      url: "{{baseUrl}}/pets"
+      auth:
+        type: basic
+        username: admin
+        password: changeme
+      body:
+        - title: json variant
+          selected: true
+          body:
+            type: json
+            data: '{"name": "Rex"}'
+        - title: form variant
+          body:
+            type: form-urlencoded
+            data:
+              - name: name
+                value: Rex
+                description: pet name
+              - name: legacy
+                value: "true"
+                disabled: true
+        - title: multipart variant
+          body:
+            type: multipart-form
+            data:
+              - name: meta
+                type: text
+                value: '{"name": "Rex"}'
+                contentType: application/json
+              - name: photos
+                type: file
+                value:
+                  - photos/rex-1.png
+                  - photos/rex-2.png
+                disabled: true
+        - title: file variant
+          body:
+            type: file
+            data:
+              - filePath: payloads/pet.json
+                contentType: application/json
+                selected: true
+              - filePath: payloads/pet.xml
+                contentType: application/xml
+                selected: false
+  - info:
+      name: Pet by owner
+      type: folder
+      seq: 3
+      tags:
+        - pets
+    docs: Folder level documentation as plain text.
+    request:
+      auth:
+        type: apikey
+        key: X-Api-Key
+        value: "{{apiKey}}"
+        placement: header
+      settings:
+        http:
+          followRedirects: false
+          maxRedirects: inherit
+    items:
+      - info:
+          name: Owner pets (GraphQL)
+          type: graphql
+          seq: 1
+        graphql:
+          method: POST
+          url: "{{baseUrl}}/graphql"
+          headers:
+            - name: X-Client
+              value: opencollection-rs
+          params:
+            - name: pretty
+              value: "1"
+              type: query
+          auth:
+            type: bearer
+            token: "{{apiKey}}"
+          body:
+            query: "query Pets($owner: ID!) { pets(owner: $owner) { id name } }"
+            variables: '{"owner": "42"}'
+        runtime:
+          assertions:
+            - expression: res.body.data
+              operator: isDefined
+        settings:
+          timeout: inherit
+        docs: GraphQL flavored listing.
+      - info:
+          name: Owner pets variants (GraphQL)
+          type: graphql
+        graphql:
+          url: "{{baseUrl}}/graphql"
+          body:
+            - title: by owner
+              selected: true
+              body:
+                query: "query { pets { id } }"
+            - title: all
+              body:
+                query: "query { allPets { id } }"
+                variables: "{}"
+      - info:
+          name: Watch pets (gRPC)
+          type: grpc
+          seq: 2
+        grpc:
+          url: grpc://localhost:50051
+          method: pets.PetService/WatchPets
+          methodType: server-streaming
+          protoFilePath: protos/pets.proto
+          metadata:
+            - name: x-request-id
+              value: abc-123
+              description: correlation id
+          auth:
+            type: ntlm
+            username: corp\user
+            password: pass
+            domain: CORP
+          message:
+            - title: all pets
+              selected: true
+              message: '{"owner": "*"}'
+            - title: one owner
+              message: '{"owner": "42"}'
+        runtime:
+          variables:
+            - name: grpcVar
+              value: x
+          scripts:
+            - type: tests
+              code: assert(true);
+          assertions:
+            - expression: res.code
+              operator: eq
+              value: "0"
+        docs: Streams pet updates.
+      - info:
+          name: Simple gRPC
+          type: grpc
+        grpc:
+          url: grpc://localhost:50051
+          method: pets.PetService/GetPet
+          methodType: unary
+          message: '{"id": "1"}'
+      - info:
+          name: Pet events (WebSocket)
+          type: websocket
+          seq: 3
+        websocket:
+          url: wss://api.example.com/pets/events
+          headers:
+            - name: Origin
+              value: https://example.com
+          auth:
+            type: wsse
+            username: wsseuser
+            password: wssepass
+          message:
+            - title: subscribe
+              selected: true
+              message:
+                type: json
+                data: '{"action": "subscribe"}'
+            - title: ping
+              message:
+                type: text
+                data: ping
+        runtime:
+          variables:
+            - name: wsVar
+              value: y
+          scripts:
+            - type: before-request
+              code: console.log("ws connect");
+        settings:
+          timeout: 10000
+          keepAliveInterval: inherit
+        docs: Live pet events.
+      - info:
+          name: Single message WS
+          type: websocket
+        websocket:
+          url: wss://api.example.com/echo
+          message:
+            type: text
+            data: hello
+  - info:
+      name: Auth zoo
+      type: folder
+    items:
+      - info:
+          name: awsv4
+          type: http
+        http:
+          method: GET
+          url: https://s3.amazonaws.com/bucket
+          auth:
+            type: awsv4
+            accessKeyId: AKIA123
+            secretAccessKey: shhh
+            sessionToken: tok
+            service: s3
+            region: eu-central-1
+            profileName: default
+      - info:
+          name: digest
+          type: http
+        http:
+          method: GET
+          url: https://example.com/digest
+          auth:
+            type: digest
+            username: du
+            password: dp
+      - info:
+          name: oauth1
+          type: http
+        http:
+          method: GET
+          url: https://example.com/oauth1
+          auth:
+            type: oauth1
+            consumerKey: ck
+            consumerSecret: cs
+            accessToken: at
+            accessTokenSecret: ats
+            callbackUrl: oob
+            verifier: v123
+            signatureMethod: RSA-SHA256
+            privateKey:
+              type: file
+              value: keys/rsa.pem
+            timestamp: "1700000000"
+            nonce: n0nce
+            version: "1.0"
+            realm: api
+            placement: header
+            includeBodyHash: true
+      - info:
+          name: oauth2 password
+          type: http
+        http:
+          method: GET
+          url: https://example.com/ropc
+          auth:
+            type: oauth2
+            flow: resource_owner_password_credentials
+            accessTokenUrl: https://auth.example.com/token
+            credentials:
+              clientId: cid
+              clientSecret: cs
+              placement: body
+            resourceOwner:
+              username: alice
+              password: wonderland
+            scope: openid
+            tokenConfig:
+              placement:
+                query: access_token
+              source: id_token
+      - info:
+          name: oauth2 authorization code
+          type: http
+        http:
+          method: GET
+          url: https://example.com/code
+          auth:
+            type: oauth2
+            flow: authorization_code
+            authorizationUrl: https://auth.example.com/authorize
+            accessTokenUrl: https://auth.example.com/token
+            refreshTokenUrl: https://auth.example.com/refresh
+            callbackUrl: https://app.example.com/callback
+            credentials:
+              clientId: cid
+            scope: openid profile
+            state: xyzzy
+            pkce:
+              disabled: false
+              method: S256
+            additionalParameters:
+              authorizationRequest:
+                - name: prompt
+                  value: consent
+                  placement: query
+              accessTokenRequest:
+                - name: audience
+                  value: api
+                  placement: body
+            settings:
+              autoFetchToken: true
+      - info:
+          name: oauth2 implicit
+          type: http
+        http:
+          method: GET
+          url: https://example.com/implicit
+          auth:
+            type: oauth2
+            flow: implicit
+            authorizationUrl: https://auth.example.com/authorize
+            callbackUrl: https://app.example.com/callback
+            credentials:
+              clientId: cid
+            scope: openid
+            state: s
+            additionalParameters:
+              authorizationRequest:
+                - name: nonce
+                  value: n
+                  placement: query
+  - type: script
+    script: |
+      module.exports = { helper: () => 42 };
+extensions:
+  x-vendor:
+    generator: opencollection-rs
