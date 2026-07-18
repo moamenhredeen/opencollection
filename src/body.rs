@@ -31,7 +31,7 @@ pub enum HttpRequestBody {
     MultipartForm { data: Vec<MultipartFormPart> },
     /// File body (one of the listed files is selected).
     #[serde(rename = "file")]
-    File { data: Vec<FileBodyEntry> },
+    File { data: Vec<FileBodyVariant> },
 }
 
 /// A form field in a [`HttpRequestBody::FormUrlEncoded`] body.
@@ -93,17 +93,24 @@ impl From<&str> for MultipartValue {
     }
 }
 
-/// A file entry in a [`HttpRequestBody::File`] body.
+/// A file variant in a [`HttpRequestBody::File`] body.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct FileBodyEntry {
+pub struct FileBodyVariant {
     /// Path to the file.
     pub file_path: String,
     /// MIME type of the file.
     pub content_type: String,
     /// Whether this file is the selected one.
     pub selected: bool,
+    /// A human-readable description of the file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<Description>,
 }
+
+/// Deprecated alias for [`FileBodyVariant`].
+#[deprecated(note = "renamed to `FileBodyVariant`")]
+pub type FileBodyEntry = FileBodyVariant;
 
 /// A named variant of an HTTP request body.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

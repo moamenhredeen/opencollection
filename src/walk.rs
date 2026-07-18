@@ -1,6 +1,6 @@
 //! Recursive traversal over collection items.
 
-use crate::request::Item;
+use crate::item::Item;
 
 /// A depth-first iterator over items, descending into folders.
 ///

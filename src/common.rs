@@ -375,3 +375,15 @@ pub enum VariableScope {
     Collection,
     Environment,
 }
+
+/// Fluent construction helpers.
+impl Variable {
+    /// Create a variable with a name and value.
+    pub fn new(name: impl Into<String>, value: impl Into<VariableValue>) -> Self {
+        Variable {
+            name: Some(name.into()),
+            value: Some(VariableValueOrVariants::Value(value.into())),
+            ..Variable::default()
+        }
+    }
+}

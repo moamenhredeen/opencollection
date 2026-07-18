@@ -3,7 +3,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::common::{Description, EnvironmentVariable, Number};
+use crate::common::{
+    Description, EnvironmentVariable, Number, SecretVariable, True, Variable, VariableValue,
+};
 
 /// Configuration for the collection.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -155,4 +157,40 @@ pub struct ProxyAuth {
     pub username: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
+}
+
+/// Fluent construction helpers.
+impl Environment {
+    /// Create an environment with the given name.
+    pub fn new(name: impl Into<String>) -> Self {
+        Environment {
+            name: name.into(),
+            color: None,
+            description: None,
+            variables: None,
+            client_certificates: None,
+            extends: None,
+            dot_env_file_path: None,
+        }
+    }
+
+    /// Append a plain variable.
+    pub fn variable(mut self, name: impl Into<String>, value: impl Into<VariableValue>) -> Self {
+        self.variables
+            .get_or_insert_with(Vec::new)
+            .push(EnvironmentVariable::Plain(Variable::new(name, value)));
+        self
+    }
+
+    /// Append a secret variable (name only; the value lives outside the collection).
+    pub fn secret(mut self, name: impl Into<String>) -> Self {
+        self.variables
+            .get_or_insert_with(Vec::new)
+            .push(EnvironmentVariable::Secret(SecretVariable {
+                secret: True,
+                name: Some(name.into()),
+                ..SecretVariable::default()
+            }));
+        self
+    }
 }

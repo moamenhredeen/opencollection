@@ -534,3 +534,21 @@ pub struct OAuth2Settings {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub auto_refresh_token: Option<bool>,
 }
+
+/// Fluent construction helpers.
+impl Auth {
+    /// HTTP Basic auth with username and password.
+    pub fn basic(username: impl Into<String>, password: impl Into<String>) -> Self {
+        Auth::Basic(AuthBasic {
+            username: Some(username.into()),
+            password: Some(password.into()),
+        })
+    }
+
+    /// Bearer token auth.
+    pub fn bearer(token: impl Into<String>) -> Self {
+        Auth::Bearer(AuthBearer {
+            token: Some(token.into()),
+        })
+    }
+}

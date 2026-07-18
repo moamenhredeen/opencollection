@@ -43,9 +43,9 @@
 
 mod auth;
 mod body;
-mod builder;
 mod common;
 mod config;
+mod item;
 mod request;
 mod walk;
 
@@ -53,6 +53,7 @@ pub use auth::*;
 pub use body::*;
 pub use common::*;
 pub use config::*;
+pub use item::*;
 pub use request::*;
 pub use walk::ItemIter;
 
@@ -99,6 +100,50 @@ pub struct OpenCollection {
 }
 
 impl OpenCollection {
+    /// Create a new collection with the given name, targeting spec version `1.0.0`.
+    ///
+    /// This and the other fluent helpers are plain methods on the model types
+    /// (all fields stay `pub`), so builder calls and direct field access mix
+    /// freely.
+    pub fn new(name: impl Into<String>) -> Self {
+        OpenCollection {
+            opencollection: Some("1.0.0".to_owned()),
+            info: Some(Info {
+                name: Some(name.into()),
+                ..Info::default()
+            }),
+            ..OpenCollection::default()
+        }
+    }
+
+    /// Set the collection summary.
+    pub fn summary(mut self, summary: impl Into<String>) -> Self {
+        self.info.get_or_insert_with(Info::default).summary = Some(summary.into());
+        self
+    }
+
+    /// Set the collection version (the collection's own version, not the spec's).
+    pub fn version(mut self, version: impl Into<String>) -> Self {
+        self.info.get_or_insert_with(Info::default).version = Some(version.into());
+        self
+    }
+
+    /// Append an item (request, folder or script file).
+    pub fn item(mut self, item: impl Into<Item>) -> Self {
+        self.items.get_or_insert_with(Vec::new).push(item.into());
+        self
+    }
+
+    /// Append an environment to the collection config.
+    pub fn environment(mut self, environment: Environment) -> Self {
+        self.config
+            .get_or_insert_with(CollectionConfig::default)
+            .environments
+            .get_or_insert_with(Vec::new)
+            .push(environment);
+        self
+    }
+
     /// Parse a collection from YAML text.
     pub fn from_yaml(yaml: &str) -> Result<Self, Error> {
         Ok(serde_yaml_ng::from_str(yaml)?)
@@ -264,6 +309,24 @@ mod tests {
         let round_tripped: HttpRequestSettings =
             serde_yaml_ng::from_str(&serde_yaml_ng::to_string(&settings).unwrap()).unwrap();
         assert_eq!(settings, round_tripped);
+    }
+
+    #[test]
+    fn http_method_enum_round_trip() {
+        // Known methods serialize as uppercase strings.
+        assert_eq!(
+            serde_yaml_ng::to_string(&HttpMethod::Get).unwrap().trim(),
+            "GET"
+        );
+        // Any string parses; case is normalized for known methods.
+        assert_eq!(HttpMethod::from("post"), HttpMethod::Post);
+        // Unknown methods round-trip losslessly through `Other`.
+        let custom: HttpMethod = serde_yaml_ng::from_str("PROPFIND").unwrap();
+        assert_eq!(custom, HttpMethod::Other("PROPFIND".to_owned()));
+        assert_eq!(
+            serde_yaml_ng::to_string(&custom).unwrap().trim(),
+            "PROPFIND"
+        );
     }
 
     #[test]
