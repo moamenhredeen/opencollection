@@ -17,7 +17,7 @@ pub use websocket::*;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::Auth;
-use crate::common::{Action, Scripts, Variable};
+use crate::common::{Scripts, Variable};
 
 /// Request settings for different request types.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -43,8 +43,6 @@ pub struct RequestDefaults {
     pub auth: Option<Auth>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub variables: Option<Vec<Variable>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub actions: Option<Vec<Action>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scripts: Option<Scripts>,
     #[serde(skip_serializing_if = "Option::is_none")]

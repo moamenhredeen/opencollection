@@ -12,11 +12,22 @@ pub enum Description {
     /// Plain text description.
     Text(String),
     /// Description content with an explicit MIME type (e.g. `text/markdown`).
-    Content {
-        content: String,
-        #[serde(rename = "type")]
-        mime_type: String,
-    },
+    Content(DescriptionContent),
+}
+
+/// The object form of a [`Description`]: content plus an explicit MIME type.
+///
+/// This is a named struct rather than an inline enum variant so that
+/// `deny_unknown_fields` applies — serde ignores the attribute on variants of
+/// an `untagged` enum, which would silently accept and drop unknown keys.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DescriptionContent {
+    /// The description text.
+    pub content: String,
+    /// The MIME type of the content (e.g. `text/markdown`).
+    #[serde(rename = "type")]
+    pub mime_type: String,
 }
 
 impl From<String> for Description {

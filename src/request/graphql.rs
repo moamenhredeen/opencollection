@@ -6,7 +6,7 @@ use crate::auth::Auth;
 use crate::body::{GraphQlBody, GraphQlBodyOrVariants};
 use crate::common::{Description, Sequence, Tag};
 use crate::request::{
-    HttpMethod, HttpRequestHeader, HttpRequestParam, HttpRequestRuntime, HttpRequestSettings,
+    HttpRequestHeader, HttpRequestParam, HttpRequestRuntime, HttpRequestSettings,
 };
 
 /// Settings for GraphQL request execution (same shape as HTTP settings).
@@ -63,7 +63,7 @@ pub struct GraphQlRequest {
 #[serde(deny_unknown_fields)]
 pub struct GraphQlRequestDetails {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub method: Option<HttpMethod>,
+    pub method: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -86,7 +86,7 @@ impl GraphQlRequest {
                 ..GraphQlRequestInfo::default()
             }),
             graphql: Some(GraphQlRequestDetails {
-                method: Some(HttpMethod::Post),
+                method: Some("POST".to_owned()),
                 url: Some(url.into()),
                 ..GraphQlRequestDetails::default()
             }),

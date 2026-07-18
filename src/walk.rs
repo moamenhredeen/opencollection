@@ -32,3 +32,5 @@ impl<'a> Iterator for ItemIter<'a> {
         Some(item)
     }
 }
+
+impl std::iter::FusedIterator for ItemIter<'_> {}

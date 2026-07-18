@@ -57,14 +57,14 @@ pub use item::*;
 pub use request::*;
 pub use walk::ItemIter;
 
-use std::collections::BTreeMap;
 use std::fmt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-/// Free-form YAML value, re-exported for the [`OpenCollection::extensions`] field.
-pub use serde_yaml_ng::Value;
+/// Free-form YAML value and mapping, re-exported for the
+/// [`OpenCollection::extensions`] field.
+pub use serde_yaml_ng::{Mapping, Value};
 
 /// An OpenCollection document (the root object of an `opencollection.yml`).
 ///
@@ -95,8 +95,12 @@ pub struct OpenCollection {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bundled: Option<bool>,
     /// Free-form extension data.
+    ///
+    /// A [`Mapping`] rather than a `BTreeMap` so that key order survives a
+    /// round-trip; this is the one place implementers put arbitrary data, so
+    /// reordering it would be a visible, unexplained diff in their files.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub extensions: Option<BTreeMap<String, Value>>,
+    pub extensions: Option<Mapping>,
 }
 
 impl OpenCollection {
@@ -151,7 +155,8 @@ impl OpenCollection {
 
     /// Read and parse a collection from a file (e.g. an `opencollection.yml`).
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, Error> {
-        let yaml = std::fs::read_to_string(path)?;
+        let path = path.as_ref();
+        let yaml = std::fs::read_to_string(path).map_err(|error| Error::io(path, error))?;
         Self::from_yaml(&yaml)
     }
 
@@ -162,7 +167,8 @@ impl OpenCollection {
 
     /// Serialize the collection to YAML and write it to a file.
     pub fn write_to_path(&self, path: impl AsRef<Path>) -> Result<(), Error> {
-        std::fs::write(path, self.to_yaml()?)?;
+        let path = path.as_ref();
+        std::fs::write(path, self.to_yaml()?).map_err(|error| Error::io(path, error))?;
         Ok(())
     }
 
@@ -175,6 +181,15 @@ impl OpenCollection {
     /// descending into folders.
     pub fn requests(&self) -> impl Iterator<Item = &Item> {
         self.iter().filter(|item| item.is_request())
+    }
+}
+
+impl<'a> IntoIterator for &'a OpenCollection {
+    type Item = &'a Item;
+    type IntoIter = ItemIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 
@@ -192,14 +207,29 @@ pub enum Error {
     /// YAML (de)serialization failed.
     Yaml(serde_yaml_ng::Error),
     /// Reading or writing a file failed.
-    Io(std::io::Error),
+    ///
+    /// Carries the path so callers can tell *which* file failed; a bare
+    /// "No such file or directory" is nearly useless in a file-oriented API.
+    Io {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+}
+
+impl Error {
+    fn io(path: impl Into<PathBuf>, source: std::io::Error) -> Self {
+        Error::Io {
+            path: path.into(),
+            source,
+        }
+    }
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Yaml(error) => write!(f, "YAML error: {error}"),
-            Error::Io(error) => write!(f, "I/O error: {error}"),
+            Error::Io { path, source } => write!(f, "I/O error for {}: {source}", path.display()),
         }
     }
 }
@@ -208,7 +238,7 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Error::Yaml(error) => Some(error),
-            Error::Io(error) => Some(error),
+            Error::Io { source, .. } => Some(source),
         }
     }
 }
@@ -216,12 +246,6 @@ impl std::error::Error for Error {
 impl From<serde_yaml_ng::Error> for Error {
     fn from(error: serde_yaml_ng::Error) -> Self {
         Error::Yaml(error)
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(error: std::io::Error) -> Self {
-        Error::Io(error)
     }
 }
 
@@ -312,26 +336,109 @@ mod tests {
     }
 
     #[test]
-    fn http_method_enum_round_trip() {
-        // Known methods serialize as uppercase strings.
-        assert_eq!(
-            serde_yaml_ng::to_string(&HttpMethod::Get).unwrap().trim(),
-            "GET"
-        );
-        // Any string parses; case is normalized for known methods.
-        assert_eq!(HttpMethod::from("post"), HttpMethod::Post);
-        // Unknown methods round-trip losslessly through `Other`.
-        let custom: HttpMethod = serde_yaml_ng::from_str("PROPFIND").unwrap();
-        assert_eq!(custom, HttpMethod::Other("PROPFIND".to_owned()));
-        assert_eq!(
-            serde_yaml_ng::to_string(&custom).unwrap().trim(),
-            "PROPFIND"
-        );
+    fn method_is_preserved_verbatim() {
+        // The schema types `method` as a free string, so casing and custom
+        // verbs must survive a round-trip untouched.
+        for method in ["GET", "get", "PROPFIND", "PropFind"] {
+            let yaml = format!("http:\n  method: {method}\n  url: https://example.com\n");
+            let request: HttpRequest = serde_yaml_ng::from_str(&yaml).unwrap();
+            assert_eq!(
+                request.http.as_ref().unwrap().method.as_deref(),
+                Some(method)
+            );
+            let round_tripped = serde_yaml_ng::to_string(&request).unwrap();
+            assert!(round_tripped.contains(&format!("method: {method}")));
+        }
     }
 
     #[test]
     fn unknown_fields_rejected() {
         let yaml = "info:\n  name: x\nhttp:\n  method: GET\n  bogus: true\n";
         assert!(serde_yaml_ng::from_str::<HttpRequest>(yaml).is_err());
+    }
+
+    #[test]
+    fn description_object_rejects_unknown_fields() {
+        // The schema marks the description object `additionalProperties: false`.
+        // `deny_unknown_fields` is ignored on variants of an untagged enum, so
+        // the object form has to be a named struct for this to hold.
+        assert!(
+            serde_yaml_ng::from_str::<Description>("content: hi\ntype: text/plain\nbogus: 1\n")
+                .is_err()
+        );
+        let ok: Description = serde_yaml_ng::from_str("content: hi\ntype: text/plain\n").unwrap();
+        assert!(matches!(ok, Description::Content(_)));
+        // The plain-string form still works.
+        assert!(matches!(
+            serde_yaml_ng::from_str::<Description>("just text").unwrap(),
+            Description::Text(_)
+        ));
+    }
+
+    #[test]
+    fn type_tag_selects_the_item_variant() {
+        // A folder with no `items` key is structurally identical to an HTTP
+        // request with no `http` key; only the `type` tag tells them apart.
+        let folder: Vec<Item> =
+            serde_yaml_ng::from_str("- info:\n    name: Empty\n    type: folder\n").unwrap();
+        assert!(matches!(folder[0], Item::Folder(_)));
+
+        let request: Vec<Item> =
+            serde_yaml_ng::from_str("- info:\n    name: Empty\n    type: http\n").unwrap();
+        assert!(matches!(request[0], Item::Http(_)));
+
+        // `type` is optional in the schema, so untagged items are selected by
+        // the key that identifies their shape.
+        let by_shape: Vec<Item> =
+            serde_yaml_ng::from_str("- info:\n    name: Users\n  items: []\n").unwrap();
+        assert!(matches!(by_shape[0], Item::Folder(_)));
+        let by_shape: Vec<Item> =
+            serde_yaml_ng::from_str("- info:\n    name: G\n  graphql:\n    url: u\n").unwrap();
+        assert!(matches!(by_shape[0], Item::GraphQl(_)));
+    }
+
+    #[test]
+    fn ambiguous_items_are_rejected() {
+        // The schema defines `Item` as a `oneOf`, so an object carrying neither
+        // a `type` tag nor a shape key matches five or six branches at once and
+        // is not a valid item. Guessing a variant here would be silently wrong.
+        for yaml in ["- info:\n    name: X\n", "- {}\n"] {
+            let error = serde_yaml_ng::from_str::<Vec<Item>>(yaml)
+                .expect_err("ambiguous item should be rejected")
+                .to_string();
+            assert!(
+                error.contains("cannot tell what kind of item"),
+                "got: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn item_errors_name_the_actual_problem() {
+        // Untagged matching used to collapse every failure into
+        // "data did not match any variant of untagged enum Item".
+        let typo = "- info:\n    name: X\n    type: graphql\n  graphql:\n    bogus: 1\n";
+        let error = serde_yaml_ng::from_str::<Vec<Item>>(typo)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("bogus"), "unhelpful error: {error}");
+
+        let unknown = "- info:\n    name: X\n    type: app\n";
+        let error = serde_yaml_ng::from_str::<Vec<Item>>(unknown)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("unknown item type `app`"), "got: {error}");
+    }
+
+    #[test]
+    fn extensions_preserve_key_order() {
+        // `extensions` is free-form, so a round-trip must not reorder keys.
+        let yaml = "opencollection: 1.0.0\nextensions:\n  zebra: 1\n  alpha: 2\n  middle: 3\n";
+        let collection = OpenCollection::from_yaml(yaml).unwrap();
+        let round_tripped = collection.to_yaml().unwrap();
+        let zebra = round_tripped.find("zebra").unwrap();
+        let alpha = round_tripped.find("alpha").unwrap();
+        let middle = round_tripped.find("middle").unwrap();
+        assert!(zebra < alpha && alpha < middle, "got:\n{round_tripped}");
     }
 }

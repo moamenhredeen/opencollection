@@ -103,14 +103,7 @@ pub struct FileBodyVariant {
     pub content_type: String,
     /// Whether this file is the selected one.
     pub selected: bool,
-    /// A human-readable description of the file.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<Description>,
 }
-
-/// Deprecated alias for [`FileBodyVariant`].
-#[deprecated(note = "renamed to `FileBodyVariant`")]
-pub type FileBodyEntry = FileBodyVariant;
 
 /// A named variant of an HTTP request body.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -10,75 +10,6 @@ use crate::common::{
     Tag, Variable,
 };
 
-/// An HTTP method.
-///
-/// The well-known methods are modelled as explicit variants; any other method
-/// (a custom verb, or one added after this crate was published) round-trips
-/// losslessly through [`HttpMethod::Other`].
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
-pub enum HttpMethod {
-    Get,
-    Post,
-    Put,
-    Patch,
-    Delete,
-    Head,
-    Options,
-    Trace,
-    Connect,
-    /// Any method not covered by the variants above (stored verbatim).
-    #[serde(untagged)]
-    Other(String),
-}
-
-impl HttpMethod {
-    /// The method as an uppercase string (e.g. `"GET"`).
-    pub fn as_str(&self) -> &str {
-        match self {
-            HttpMethod::Get => "GET",
-            HttpMethod::Post => "POST",
-            HttpMethod::Put => "PUT",
-            HttpMethod::Patch => "PATCH",
-            HttpMethod::Delete => "DELETE",
-            HttpMethod::Head => "HEAD",
-            HttpMethod::Options => "OPTIONS",
-            HttpMethod::Trace => "TRACE",
-            HttpMethod::Connect => "CONNECT",
-            HttpMethod::Other(method) => method,
-        }
-    }
-}
-
-impl From<&str> for HttpMethod {
-    fn from(method: &str) -> Self {
-        match method.to_ascii_uppercase().as_str() {
-            "GET" => HttpMethod::Get,
-            "POST" => HttpMethod::Post,
-            "PUT" => HttpMethod::Put,
-            "PATCH" => HttpMethod::Patch,
-            "DELETE" => HttpMethod::Delete,
-            "HEAD" => HttpMethod::Head,
-            "OPTIONS" => HttpMethod::Options,
-            "TRACE" => HttpMethod::Trace,
-            "CONNECT" => HttpMethod::Connect,
-            _ => HttpMethod::Other(method.to_owned()),
-        }
-    }
-}
-
-impl From<String> for HttpMethod {
-    fn from(method: String) -> Self {
-        HttpMethod::from(method.as_str())
-    }
-}
-
-impl std::fmt::Display for HttpMethod {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
 /// An HTTP header with name, value, description and disabled state.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -134,9 +65,6 @@ pub struct HttpRequestSettings {
     /// Whether to follow redirects.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub follow_redirects: Option<Inheritable<bool>>,
-    /// Whether to forward the `Authorization` header on redirects.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub forward_authorization_header: Option<Inheritable<bool>>,
     /// Maximum number of redirects to follow.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_redirects: Option<Inheritable<Number>>,
@@ -181,9 +109,6 @@ pub struct HttpRequest {
     pub runtime: Option<HttpRequestRuntime>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub settings: Option<HttpRequestSettings>,
-    /// Embedded app configuration.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub app: Option<HttpRequestApp>,
     /// Example request/response pairs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub examples: Option<Vec<HttpRequestExample>>,
@@ -198,7 +123,7 @@ pub struct HttpRequest {
 pub struct HttpRequestDetails {
     /// HTTP method.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub method: Option<HttpMethod>,
+    pub method: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -227,16 +152,6 @@ pub struct HttpRequestRuntime {
     pub actions: Option<Vec<Action>>,
 }
 
-/// Embedded app configuration for an HTTP request.
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct HttpRequestApp {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub enabled: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub code: Option<String>,
-}
-
 /// An example HTTP request/response pair.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -258,7 +173,7 @@ pub struct HttpExampleRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub method: Option<HttpMethod>,
+    pub method: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub headers: Option<Vec<HttpRequestHeader>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -308,7 +223,7 @@ pub enum ExampleResponseBodyType {
 /// can freely mix builder calls with direct field access.
 impl HttpRequest {
     /// Create a request with the given HTTP method and URL.
-    pub fn new(method: impl Into<HttpMethod>, url: impl Into<String>) -> Self {
+    pub fn new(method: impl Into<String>, url: impl Into<String>) -> Self {
         HttpRequest {
             info: Some(HttpRequestInfo {
                 item_type: Some(HttpTypeTag::Http),
@@ -325,27 +240,27 @@ impl HttpRequest {
 
     /// Create a GET request.
     pub fn get(url: impl Into<String>) -> Self {
-        HttpRequest::new(HttpMethod::Get, url)
+        HttpRequest::new("GET", url)
     }
 
     /// Create a POST request.
     pub fn post(url: impl Into<String>) -> Self {
-        HttpRequest::new(HttpMethod::Post, url)
+        HttpRequest::new("POST", url)
     }
 
     /// Create a PUT request.
     pub fn put(url: impl Into<String>) -> Self {
-        HttpRequest::new(HttpMethod::Put, url)
+        HttpRequest::new("PUT", url)
     }
 
     /// Create a PATCH request.
     pub fn patch(url: impl Into<String>) -> Self {
-        HttpRequest::new(HttpMethod::Patch, url)
+        HttpRequest::new("PATCH", url)
     }
 
     /// Create a DELETE request.
     pub fn delete(url: impl Into<String>) -> Self {
-        HttpRequest::new(HttpMethod::Delete, url)
+        HttpRequest::new("DELETE", url)
     }
 
     /// Set the display name.
