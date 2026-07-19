@@ -1,0 +1,27 @@
+info:
+  name: Owner pets (GraphQL)
+  type: graphql
+  seq: 1
+graphql:
+  method: POST
+  url: '{{baseUrl}}/graphql'
+  headers:
+  - name: X-Client
+    value: opencollection-rs
+  params:
+  - name: pretty
+    value: '1'
+    type: query
+  body:
+    query: 'query Pets($owner: ID!) { pets(owner: $owner) { id name } }'
+    variables: '{"owner": "42"}'
+  auth:
+    type: bearer
+    token: '{{apiKey}}'
+runtime:
+  assertions:
+  - expression: res.body.data
+    operator: isDefined
+settings:
+  timeout: inherit
+docs: GraphQL flavored listing.

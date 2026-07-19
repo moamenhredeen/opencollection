@@ -1,0 +1,10 @@
+info:
+  name: digest
+  type: http
+http:
+  method: GET
+  url: https://example.com/digest
+  auth:
+    type: digest
+    username: du
+    password: dp

@@ -1,0 +1,17 @@
+info:
+  name: Pet by owner
+  type: folder
+  seq: 3
+  tags:
+  - pets
+request:
+  auth:
+    type: apikey
+    key: X-Api-Key
+    value: '{{apiKey}}'
+    placement: header
+  settings:
+    http:
+      followRedirects: false
+      maxRedirects: inherit
+docs: Folder level documentation as plain text.

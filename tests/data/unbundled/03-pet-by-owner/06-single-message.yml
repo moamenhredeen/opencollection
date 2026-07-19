@@ -1,0 +1,8 @@
+info:
+  name: Single message WS
+  type: websocket
+websocket:
+  url: wss://api.example.com/echo
+  message:
+    type: text
+    data: hello

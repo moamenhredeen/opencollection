@@ -1,13 +1,21 @@
 //! Lossless round-trip of a collection exercising every schema construct.
 
+mod common;
+
+use common::TempDir;
 use opencollection::{Auth, AuthOAuth2, Item, OpenCollection};
 
 const FULL: &str = include_str!("data/full.yml");
+const FULL_PATH: &str = "tests/data/full.yml";
 
 #[test]
 fn full_collection_round_trips_losslessly() {
-    let collection = OpenCollection::from_yaml(FULL).expect("fixture should parse");
-    let serialized = collection.to_yaml().expect("collection should serialize");
+    let collection = OpenCollection::load(FULL_PATH).expect("fixture should parse");
+
+    let temp = TempDir::new("roundtrip");
+    let path = temp.join("collection.yml");
+    collection.save(&path).expect("collection should serialize");
+    let serialized = std::fs::read_to_string(&path).unwrap();
 
     let original: serde_yaml_ng::Value = serde_yaml_ng::from_str(FULL).unwrap();
     let round_tripped: serde_yaml_ng::Value = serde_yaml_ng::from_str(&serialized).unwrap();
@@ -16,13 +24,13 @@ fn full_collection_round_trips_losslessly() {
         "serialized YAML should be value-identical to the fixture"
     );
 
-    let reparsed = OpenCollection::from_yaml(&serialized).unwrap();
+    let reparsed = OpenCollection::load(&path).unwrap();
     assert_eq!(collection, reparsed);
 }
 
 #[test]
 fn traversal_sees_nested_items() {
-    let collection = OpenCollection::from_yaml(FULL).unwrap();
+    let collection = OpenCollection::load(FULL_PATH).unwrap();
 
     let names: Vec<_> = collection.iter().filter_map(Item::name).collect();
     assert!(names.contains(&"List pets"));
@@ -40,7 +48,7 @@ fn traversal_sees_nested_items() {
 
 #[test]
 fn parsed_details_are_typed() {
-    let collection = OpenCollection::from_yaml(FULL).unwrap();
+    let collection = OpenCollection::load(FULL_PATH).unwrap();
 
     // Collection defaults carry an OAuth2 client-credentials auth.
     let defaults = collection.request.as_ref().unwrap();

@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::auth::Auth;
-use crate::common::{Description, Inheritable, Number, Scripts, Sequence, Tag, Variable};
+use crate::common::{Description, Inheritable, Number, Scripts, Sequence, Source, Tag, Variable};
 use crate::request::HttpRequestHeader;
 
 /// The literal item type `"websocket"`.
@@ -47,6 +47,9 @@ pub struct WebSocketRequest {
     pub settings: Option<WebSocketRequestSettings>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub docs: Option<String>,
+    /// Where this request was read from; see [`Source`].
+    #[serde(skip)]
+    pub source: Source,
 }
 
 /// WebSocket request protocol details.

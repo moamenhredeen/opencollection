@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::Auth;
 use crate::body::{GraphQlBody, GraphQlBodyOrVariants};
-use crate::common::{Description, Sequence, Tag};
+use crate::common::{Description, Sequence, Source, Tag};
 use crate::request::{
     HttpRequestHeader, HttpRequestParam, HttpRequestRuntime, HttpRequestSettings,
 };
@@ -56,6 +56,9 @@ pub struct GraphQlRequest {
     pub settings: Option<GraphQlRequestSettings>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub docs: Option<String>,
+    /// Where this request was read from; see [`Source`].
+    #[serde(skip)]
+    pub source: Source,
 }
 
 /// GraphQL request protocol details.

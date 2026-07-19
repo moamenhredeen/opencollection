@@ -535,9 +535,33 @@ pub struct OAuth2Settings {
     pub auto_refresh_token: Option<bool>,
 }
 
-/// Fluent construction helpers.
+/// Fluent construction helpers for the two simplest schemes.
+///
+/// The rest — Digest, NTLM, WSSE, API key, AWS SigV4, OAuth 1.0 and all four
+/// OAuth 2.0 flows — have no shorthand because they carry too many fields to
+/// pass positionally; build their structs directly and wrap them:
+///
+/// ```
+/// use opencollection::{Auth, AuthApiKey, ApiKeyPlacement};
+///
+/// let auth = Auth::ApiKey(AuthApiKey {
+///     key: Some("X-API-Key".to_owned()),
+///     value: Some("{{apiKey}}".to_owned()),
+///     placement: Some(ApiKeyPlacement::Header),
+/// });
+/// ```
+///
+/// [`Auth::Inherit`] defers to the enclosing folder or collection, and is
+/// distinct from setting no auth at all.
 impl Auth {
-    /// HTTP Basic auth with username and password.
+    /// HTTP Basic auth.
+    ///
+    /// ```
+    /// use opencollection::{Auth, HttpRequest};
+    ///
+    /// let request = HttpRequest::get("https://example.com/pets")
+    ///     .auth(Auth::basic("admin", "{{password}}"));
+    /// ```
     pub fn basic(username: impl Into<String>, password: impl Into<String>) -> Self {
         Auth::Basic(AuthBasic {
             username: Some(username.into()),

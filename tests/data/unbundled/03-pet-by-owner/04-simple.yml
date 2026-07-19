@@ -1,0 +1,8 @@
+info:
+  name: Simple gRPC
+  type: grpc
+grpc:
+  url: grpc://localhost:50051
+  method: pets.PetService/GetPet
+  methodType: unary
+  message: '{"id": "1"}'

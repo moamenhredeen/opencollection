@@ -174,7 +174,21 @@ impl Environment {
         }
     }
 
-    /// Append a plain variable.
+    /// Append a variable with a value stored in the collection.
+    ///
+    /// Use [`secret`](Self::secret) for anything that must not be committed.
+    ///
+    /// ```
+    /// use opencollection::{Environment, EnvironmentVariable};
+    ///
+    /// let environment = Environment::new("prod")
+    ///     .variable("baseUrl", "https://api.example.com")
+    ///     .secret("apiKey");
+    ///
+    /// let variables = environment.variables.unwrap();
+    /// assert!(matches!(variables[0], EnvironmentVariable::Plain(_)));
+    /// assert!(matches!(variables[1], EnvironmentVariable::Secret(_)));
+    /// ```
     pub fn variable(mut self, name: impl Into<String>, value: impl Into<VariableValue>) -> Self {
         self.variables
             .get_or_insert_with(Vec::new)
@@ -182,7 +196,14 @@ impl Environment {
         self
     }
 
-    /// Append a secret variable (name only; the value lives outside the collection).
+    /// Declare a secret variable: the name is recorded, the value is not.
+    ///
+    /// This is how the spec keeps credentials out of a collection that gets
+    /// committed or shared. The variable is declared so tooling knows it exists;
+    /// supplying the value at run time is the client's job, often from the
+    /// environment's [`dot_env_file_path`](Environment::dot_env_file_path).
+    ///
+    /// See [`variable`](Self::variable) for an example of both together.
     pub fn secret(mut self, name: impl Into<String>) -> Self {
         self.variables
             .get_or_insert_with(Vec::new)

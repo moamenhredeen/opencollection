@@ -1,10 +1,12 @@
 //! Collection items: requests of all protocols, folders and script files.
 
+use std::path::{Path, PathBuf};
+
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_yaml_ng::Value;
 
-use crate::common::{Description, Documentation, Sequence, Tag};
+use crate::common::{Description, Documentation, Sequence, Source, Tag};
 use crate::request::{GraphQlRequest, GrpcRequest, HttpRequest, RequestDefaults, WebSocketRequest};
 
 /// An item in a collection or folder.
@@ -35,7 +37,7 @@ pub enum Item {
 ///
 /// Dispatching on the tag propagates each variant's real error instead. The
 /// schema leaves `type` optional, so items that omit it are selected by the
-/// key identifying their shape — see [`shape_key_fallback`].
+/// key identifying their shape — see `shape_key_fallback` below.
 impl<'de> Deserialize<'de> for Item {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -112,6 +114,19 @@ where
 
 impl Item {
     /// The item's display name, if it has one.
+    ///
+    /// `None` is common, not exceptional: `info` is optional on every request
+    /// type, and [`ScriptFile`] has no name field at all.
+    ///
+    /// ```
+    /// use opencollection::{HttpRequest, Item};
+    ///
+    /// let named = Item::from(HttpRequest::get("https://example.com").name("List pets"));
+    /// assert_eq!(named.name(), Some("List pets"));
+    ///
+    /// let anonymous = Item::from(HttpRequest::get("https://example.com"));
+    /// assert_eq!(anonymous.name(), None);
+    /// ```
     pub fn name(&self) -> Option<&str> {
         match self {
             Item::Http(request) => request.info.as_ref()?.name.as_deref(),
@@ -123,7 +138,65 @@ impl Item {
         }
     }
 
-    /// Whether this item is a request (HTTP, GraphQL, gRPC or WebSocket).
+    /// Where this item lives, relative to the collection root.
+    ///
+    /// `None` for an item that has never been saved. For a folder this is its
+    /// directory, not its `folder.yml`. See [`Source`].
+    ///
+    /// This is the item's identity on disk. Match on it to find the item a
+    /// reloaded one replaces:
+    ///
+    /// ```
+    /// # use opencollection::{HttpRequest, Item, OpenCollection};
+    /// # let dir = std::env::temp_dir().join("opencollection-doc-item-source");
+    /// # let _ = std::fs::remove_dir_all(&dir);
+    /// # let mut seed = OpenCollection::new("Petstore")
+    /// #     .item(HttpRequest::get("https://example.com/pets").name("List pets"));
+    /// # seed.bundled = Some(false);
+    /// # seed.save(&dir)?;
+    /// let collection = OpenCollection::load(&dir)?;
+    ///
+    /// let item = collection.iter().next().unwrap();
+    /// assert_eq!(item.source(), Some(std::path::Path::new("List pets.yml")));
+    ///
+    /// // Built in memory, never written: no home yet.
+    /// assert_eq!(Item::from(HttpRequest::get("u")).source(), None);
+    /// # let _ = std::fs::remove_dir_all(&dir);
+    /// # Ok::<(), opencollection::Error>(())
+    /// ```
+    pub fn source(&self) -> Option<&Path> {
+        match self {
+            Item::Http(request) => request.source.path(),
+            Item::GraphQl(request) => request.source.path(),
+            Item::Grpc(request) => request.source.path(),
+            Item::WebSocket(request) => request.source.path(),
+            Item::Folder(folder) => folder.source.path(),
+            Item::Script(script) => script.source.path(),
+        }
+    }
+
+    /// Set where this item lives, relative to the collection root.
+    pub(crate) fn set_source(&mut self, path: impl Into<PathBuf>) {
+        let source = Source::at(path);
+        match self {
+            Item::Http(request) => request.source = source,
+            Item::GraphQl(request) => request.source = source,
+            Item::Grpc(request) => request.source = source,
+            Item::WebSocket(request) => request.source = source,
+            Item::Folder(folder) => folder.source = source,
+            Item::Script(script) => script.source = source,
+        }
+    }
+
+    /// Whether this item is a request (HTTP, GraphQL, gRPC or WebSocket)
+    /// rather than a folder or a script file.
+    ///
+    /// ```
+    /// use opencollection::{Folder, HttpRequest, Item};
+    ///
+    /// assert!(Item::from(HttpRequest::get("https://example.com")).is_request());
+    /// assert!(!Item::from(Folder::new("Pets")).is_request());
+    /// ```
     pub fn is_request(&self) -> bool {
         matches!(
             self,
@@ -208,11 +281,32 @@ pub struct Folder {
     pub request: Option<RequestDefaults>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub docs: Option<Documentation>,
+    /// Where this folder was read from — its *directory*; see [`Source`].
+    #[serde(skip)]
+    pub source: Source,
 }
 
 /// Fluent construction helpers.
 impl Folder {
     /// Create a folder with the given name.
+    ///
+    /// A folder is an item like any other, so it nests, and in an unbundled
+    /// collection it becomes a directory holding a `folder.yml` beside its
+    /// children.
+    ///
+    /// ```
+    /// use opencollection::{Folder, HttpRequest, Item, OpenCollection};
+    ///
+    /// let collection = OpenCollection::new("Petstore").item(
+    ///     Folder::new("Pets").item(
+    ///         Folder::new("Admin")
+    ///             .item(HttpRequest::delete("https://example.com/pets/1").name("Delete pet")),
+    ///     ),
+    /// );
+    ///
+    /// let names: Vec<_> = collection.iter().filter_map(Item::name).collect();
+    /// assert_eq!(names, ["Pets", "Admin", "Delete pet"]);
+    /// ```
     pub fn new(name: impl Into<String>) -> Self {
         Folder {
             info: Some(FolderInfo {
@@ -249,4 +343,7 @@ pub struct ScriptFile {
     /// The script source.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub script: Option<String>,
+    /// Where this script was read from; see [`Source`].
+    #[serde(skip)]
+    pub source: Source,
 }

@@ -7,7 +7,7 @@ use crate::auth::Auth;
 use crate::body::{HttpBodyOrVariants, HttpRequestBody};
 use crate::common::{
     Action, Assertion, Description, Inheritable, Number, Script, ScriptPhase, Scripts, Sequence,
-    Tag, Variable,
+    Source, Tag, Variable,
 };
 
 /// An HTTP header with name, value, description and disabled state.
@@ -115,6 +115,9 @@ pub struct HttpRequest {
     /// Documentation for this request.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub docs: Option<String>,
+    /// Where this request was read from; see [`Source`].
+    #[serde(skip)]
+    pub source: Source,
 }
 
 /// HTTP request protocol details.
@@ -223,6 +226,38 @@ pub enum ExampleResponseBodyType {
 /// can freely mix builder calls with direct field access.
 impl HttpRequest {
     /// Create a request with the given HTTP method and URL.
+    ///
+    /// The method is stored verbatim — the schema types it as a free string, so
+    /// casing survives and custom verbs like `PROPFIND` are as valid as `GET`.
+    /// Prefer [`get`](Self::get), [`post`](Self::post) and friends for the
+    /// common verbs.
+    ///
+    /// ```
+    /// use opencollection::{Auth, HttpRequest, ScriptPhase};
+    ///
+    /// let request = HttpRequest::post("{{baseUrl}}/pets/{id}")
+    ///     .name("Update pet")
+    ///     .description("Replaces a pet by id")
+    ///     .header("Content-Type", "application/json")
+    ///     .path_param("id", "42")
+    ///     .query("dry_run", "true")
+    ///     .json_body(r#"{"name": "Rex"}"#)
+    ///     .auth(Auth::bearer("{{apiKey}}"))
+    ///     .script(ScriptPhase::BeforeRequest, "console.log('sending');");
+    ///
+    /// let details = request.http.as_ref().unwrap();
+    /// assert_eq!(details.method.as_deref(), Some("POST"));
+    /// assert_eq!(details.params.as_ref().unwrap().len(), 2);
+    /// ```
+    ///
+    /// Everything is a plain method over `pub` fields, so anything the builders
+    /// do not cover you can set directly:
+    ///
+    /// ```
+    /// # use opencollection::HttpRequest;
+    /// let mut request = HttpRequest::get("https://example.com/pets");
+    /// request.info.as_mut().unwrap().seq = Some(3.0.into());
+    /// ```
     pub fn new(method: impl Into<String>, url: impl Into<String>) -> Self {
         HttpRequest {
             info: Some(HttpRequestInfo {
@@ -291,12 +326,29 @@ impl HttpRequest {
         self
     }
 
-    /// Append a query parameter.
+    /// Append a query parameter — the `?limit=10` kind.
+    ///
+    /// Both parameter kinds live in the same `params` list, told apart by their
+    /// [`ParamType`]; this is the difference between the two methods.
+    ///
+    /// ```
+    /// use opencollection::{HttpRequest, ParamType};
+    ///
+    /// let request = HttpRequest::get("https://example.com/pets/{id}")
+    ///     .query("limit", "10")
+    ///     .path_param("id", "42");
+    ///
+    /// let params = request.http.unwrap().params.unwrap();
+    /// assert_eq!(params[0].param_type, ParamType::Query);
+    /// assert_eq!(params[1].param_type, ParamType::Path);
+    /// ```
     pub fn query(self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.param(name, value, ParamType::Query)
     }
 
-    /// Append a path parameter.
+    /// Append a path parameter — the `{id}` kind, substituted into the URL.
+    ///
+    /// See [`query`](Self::query) for how the two are distinguished.
     pub fn path_param(self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.param(name, value, ParamType::Path)
     }
@@ -326,17 +378,54 @@ impl HttpRequest {
         self
     }
 
-    /// Set a raw JSON body.
+    /// Set a raw JSON body from text you have already serialized.
+    ///
+    /// The spec stores bodies as strings, so this takes the JSON *as written*
+    /// and tags it `json` — it does not serialize a value for you, and does not
+    /// validate. Template placeholders therefore survive, which is the point:
+    ///
+    /// ```
+    /// use opencollection::{HttpRequest, HttpRequestBody, HttpBodyOrVariants};
+    ///
+    /// let request = HttpRequest::post("https://example.com/pets")
+    ///     .json_body(r#"{"name": "{{petName}}"}"#);
+    ///
+    /// let Some(HttpBodyOrVariants::Body(HttpRequestBody::Json { data })) =
+    ///     request.http.unwrap().body
+    /// else {
+    ///     unreachable!()
+    /// };
+    /// assert_eq!(data, r#"{"name": "{{petName}}"}"#);
+    /// ```
+    ///
+    /// Use [`body`](Self::body) for the form, multipart and file kinds.
     pub fn json_body(self, data: impl Into<String>) -> Self {
         self.body(HttpRequestBody::Json { data: data.into() })
     }
 
-    /// Set a raw text body.
+    /// Set a raw text body, tagged `text`.
+    ///
+    /// Like [`json_body`](Self::json_body), the string is stored as written.
     pub fn text_body(self, data: impl Into<String>) -> Self {
         self.body(HttpRequestBody::Text { data: data.into() })
     }
 
-    /// Set the authentication.
+    /// Set the authentication scheme.
+    ///
+    /// [`Auth::Inherit`] is the schema's way of deferring to the enclosing
+    /// folder or collection, and is distinct from setting nothing at all.
+    ///
+    /// ```
+    /// use opencollection::{Auth, HttpRequest};
+    ///
+    /// let explicit = HttpRequest::get("u").auth(Auth::bearer("{{token}}"));
+    /// let inherited = HttpRequest::get("u").auth(Auth::Inherit);
+    /// let unset = HttpRequest::get("u");
+    ///
+    /// assert_eq!(inherited.http.unwrap().auth, Some(Auth::Inherit));
+    /// assert_eq!(unset.http.unwrap().auth, None);
+    /// # let _ = explicit;
+    /// ```
     pub fn auth(mut self, auth: Auth) -> Self {
         self.details_mut().auth = Some(auth);
         self

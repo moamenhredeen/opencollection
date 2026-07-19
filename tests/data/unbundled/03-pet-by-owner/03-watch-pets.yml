@@ -1,0 +1,36 @@
+info:
+  name: Watch pets (gRPC)
+  type: grpc
+  seq: 2
+grpc:
+  url: grpc://localhost:50051
+  method: pets.PetService/WatchPets
+  methodType: server-streaming
+  protoFilePath: protos/pets.proto
+  metadata:
+  - name: x-request-id
+    value: abc-123
+    description: correlation id
+  message:
+  - title: all pets
+    selected: true
+    message: '{"owner": "*"}'
+  - title: one owner
+    message: '{"owner": "42"}'
+  auth:
+    type: ntlm
+    username: corp\user
+    password: pass
+    domain: CORP
+runtime:
+  variables:
+  - name: grpcVar
+    value: x
+  scripts:
+  - type: tests
+    code: assert(true);
+  assertions:
+  - expression: res.code
+    operator: eq
+    value: '0'
+docs: Streams pet updates.

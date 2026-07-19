@@ -1,0 +1,14 @@
+info:
+  name: Owner pets variants (GraphQL)
+  type: graphql
+graphql:
+  url: '{{baseUrl}}/graphql'
+  body:
+  - title: by owner
+    selected: true
+    body:
+      query: query { pets { id } }
+  - title: all
+    body:
+      query: query { allPets { id } }
+      variables: '{}'

@@ -1,0 +1,6 @@
+syntax = "proto3";
+package pets;
+
+service Pets {
+  rpc Watch (WatchRequest) returns (stream Pet);
+}

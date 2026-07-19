@@ -1,0 +1,31 @@
+info:
+  name: oauth2 authorization code
+  type: http
+http:
+  method: GET
+  url: https://example.com/code
+  auth:
+    type: oauth2
+    flow: authorization_code
+    authorizationUrl: https://auth.example.com/authorize
+    accessTokenUrl: https://auth.example.com/token
+    refreshTokenUrl: https://auth.example.com/refresh
+    callbackUrl: https://app.example.com/callback
+    credentials:
+      clientId: cid
+    scope: openid profile
+    state: xyzzy
+    pkce:
+      disabled: false
+      method: S256
+    additionalParameters:
+      authorizationRequest:
+      - name: prompt
+        value: consent
+        placement: query
+      accessTokenRequest:
+      - name: audience
+        value: api
+        placement: body
+    settings:
+      autoFetchToken: true

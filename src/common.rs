@@ -1,7 +1,94 @@
 //! Shared building blocks used across the collection model: descriptions,
 //! variables, scripts, assertions and runtime actions.
 
+use std::fmt;
+use std::path::{Path, PathBuf};
+
 use serde::{Deserialize, Serialize};
+
+/// Where a collection or item lives on disk.
+///
+/// Set by [`OpenCollection::load`](crate::OpenCollection::load) for unbundled
+/// collections and used when saving, so an item is written back to the file it
+/// came from rather than to a name derived afresh from its title.
+///
+/// That is what makes load → save → load idempotent. Deriving names at save
+/// time renames every file in a tree whose names follow a different convention
+/// — the normal case for collections written by other tools — and since the old
+/// files are still there, every item is then read twice.
+///
+/// On an item this is a path *relative to the collection root*
+/// (`pets/create-pet.yml`, or just `pets` for a folder, whose home is its
+/// directory). On [`OpenCollection`](crate::OpenCollection) it is that root.
+/// Relative item paths keep "load from A, save into B" correct at any nesting
+/// depth, and survive moving the collection directory.
+///
+/// Not part of the schema, so it is skipped during (de)serialization. Assign
+/// [`Source::default`] to clear it — a cloned item must be cleared, or the copy
+/// and the original both claim one file.
+#[derive(Clone, Default)]
+pub struct Source(Option<PathBuf>);
+
+impl Source {
+    /// The path this was read from: relative to the collection root for an
+    /// item, the root itself for a collection.
+    ///
+    /// `None` if it has never been saved.
+    ///
+    /// ```
+    /// use opencollection::{HttpRequest, OpenCollection};
+    /// # let dir = std::env::temp_dir().join("opencollection-doc-source-path");
+    /// # let _ = std::fs::remove_dir_all(&dir);
+    /// # let mut seed = OpenCollection::new("Petstore")
+    /// #     .item(HttpRequest::get("https://example.com/pets").name("List pets"));
+    /// # seed.bundled = Some(false);
+    /// # seed.save(&dir)?;
+    /// let collection = OpenCollection::load(&dir)?;
+    ///
+    /// // The collection remembers its root; items remember their place in it.
+    /// assert_eq!(collection.source.path(), Some(dir.as_path()));
+    ///
+    /// // A collection built in memory has neither.
+    /// assert_eq!(OpenCollection::new("Fresh").source.path(), None);
+    /// # let _ = std::fs::remove_dir_all(&dir);
+    /// # Ok::<(), opencollection::Error>(())
+    /// ```
+    pub fn path(&self) -> Option<&Path> {
+        self.0.as_deref()
+    }
+
+    pub(crate) fn at(path: impl Into<PathBuf>) -> Self {
+        Source(Some(path.into()))
+    }
+}
+
+/// Provenance is deliberately invisible to equality.
+///
+/// These types model a *document*, and where a copy of it happened to be read
+/// from is not part of the document: two collections with the same content are
+/// equal whether they came from disk, from a builder, or from two different
+/// directories. Tests comparing a built collection against a loaded one depend
+/// on this.
+///
+/// It also keeps `#[derive(PartialEq)]` working on all six item types. The
+/// alternative — hand-written impls that skip one field — is six chances to
+/// forget a *new* field when the schema grows.
+impl PartialEq for Source {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+/// Prints just the file name, so an `assert_eq!` failure on a collection is not
+/// buried in absolute paths repeated inside every item.
+impl fmt::Debug for Source {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0.as_deref().and_then(Path::file_name) {
+            Some(name) => write!(f, "Source({name:?})"),
+            None => f.write_str("Source(None)"),
+        }
+    }
+}
 
 /// A description, either as plain text or as content with an explicit MIME type.
 ///

@@ -1,0 +1,24 @@
+info:
+  name: oauth1
+  type: http
+http:
+  method: GET
+  url: https://example.com/oauth1
+  auth:
+    type: oauth1
+    consumerKey: ck
+    consumerSecret: cs
+    accessToken: at
+    accessTokenSecret: ats
+    callbackUrl: oob
+    verifier: v123
+    signatureMethod: RSA-SHA256
+    privateKey:
+      type: file
+      value: keys/rsa.pem
+    timestamp: '1700000000'
+    nonce: n0nce
+    version: '1.0'
+    realm: api
+    placement: header
+    includeBodyHash: true

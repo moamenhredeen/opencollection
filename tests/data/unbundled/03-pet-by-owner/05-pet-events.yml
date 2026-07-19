@@ -1,0 +1,34 @@
+info:
+  name: Pet events (WebSocket)
+  type: websocket
+  seq: 3
+websocket:
+  url: wss://api.example.com/pets/events
+  headers:
+  - name: Origin
+    value: https://example.com
+  message:
+  - title: subscribe
+    selected: true
+    message:
+      type: json
+      data: '{"action": "subscribe"}'
+  - title: ping
+    message:
+      type: text
+      data: ping
+  auth:
+    type: wsse
+    username: wsseuser
+    password: wssepass
+runtime:
+  variables:
+  - name: wsVar
+    value: y
+  scripts:
+  - type: before-request
+    code: console.log("ws connect");
+settings:
+  timeout: 10000
+  keepAliveInterval: inherit
+docs: Live pet events.

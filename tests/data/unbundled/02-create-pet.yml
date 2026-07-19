@@ -1,0 +1,51 @@
+info:
+  name: Create pet
+  type: http
+  seq: 2
+http:
+  method: POST
+  url: '{{baseUrl}}/pets'
+  body:
+  - title: json variant
+    selected: true
+    body:
+      type: json
+      data: '{"name": "Rex"}'
+  - title: form variant
+    body:
+      type: form-urlencoded
+      data:
+      - name: name
+        value: Rex
+        description: pet name
+      - name: legacy
+        value: 'true'
+        disabled: true
+  - title: multipart variant
+    body:
+      type: multipart-form
+      data:
+      - name: meta
+        type: text
+        value: '{"name": "Rex"}'
+        contentType: application/json
+      - name: photos
+        type: file
+        value:
+        - photos/rex-1.png
+        - photos/rex-2.png
+        disabled: true
+  - title: file variant
+    body:
+      type: file
+      data:
+      - filePath: payloads/pet.json
+        contentType: application/json
+        selected: true
+      - filePath: payloads/pet.xml
+        contentType: application/xml
+        selected: false
+  auth:
+    type: basic
+    username: admin
+    password: changeme

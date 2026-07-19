@@ -1,0 +1,20 @@
+info:
+  name: oauth2 implicit
+  type: http
+http:
+  method: GET
+  url: https://example.com/implicit
+  auth:
+    type: oauth2
+    flow: implicit
+    authorizationUrl: https://auth.example.com/authorize
+    callbackUrl: https://app.example.com/callback
+    credentials:
+      clientId: cid
+    scope: openid
+    state: s
+    additionalParameters:
+      authorizationRequest:
+      - name: nonce
+        value: n
+        placement: query

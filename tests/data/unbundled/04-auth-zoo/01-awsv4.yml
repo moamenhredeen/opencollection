@@ -1,0 +1,14 @@
+info:
+  name: awsv4
+  type: http
+http:
+  method: GET
+  url: https://s3.amazonaws.com/bucket
+  auth:
+    type: awsv4
+    accessKeyId: AKIA123
+    secretAccessKey: shhh
+    sessionToken: tok
+    service: s3
+    region: eu-central-1
+    profileName: default

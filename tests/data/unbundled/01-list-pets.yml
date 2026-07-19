@@ -1,0 +1,78 @@
+info:
+  name: List pets
+  description: Lists pets with pagination
+  type: http
+  seq: 1
+  tags:
+  - pets
+  - smoke
+http:
+  method: GET
+  url: '{{baseUrl}}/pets'
+  headers:
+  - name: Accept
+    value: application/json
+  - name: X-Debug
+    value: '1'
+    disabled: true
+  params:
+  - name: limit
+    value: '10'
+    type: query
+  - name: ownerId
+    value: '42'
+    description: the owner
+    type: path
+  auth: inherit
+runtime:
+  variables:
+  - name: requestVar
+    value: local
+  scripts:
+  - type: after-response
+    code: console.log(res.status);
+  assertions:
+  - expression: res.status
+    operator: eq
+    value: '200'
+  - expression: res.body.pets
+    operator: isDefined
+    disabled: true
+  actions:
+  - type: set-variable
+    phase: after-response
+    selector:
+      expression: $.pets[0].id
+      method: jsonq
+    variable:
+      name: firstPetId
+      scope: collection
+settings:
+  encodeUrl: inherit
+  timeout: 5000
+examples:
+- name: happy path
+  description: a typical response
+  request:
+    url: https://api.example.com/pets?limit=10
+    method: GET
+    headers:
+    - name: Accept
+      value: application/json
+    params:
+    - name: limit
+      value: '10'
+      type: query
+    body:
+      type: json
+      data: '{}'
+  response:
+    status: 200
+    statusText: OK
+    headers:
+    - name: Content-Type
+      value: application/json
+    body:
+      type: json
+      data: '{"pets": []}'
+docs: Fetches all the pets.

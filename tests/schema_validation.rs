@@ -4,7 +4,7 @@
 use opencollection::{Auth, Environment, Folder, HttpRequest, OpenCollection};
 
 const SCHEMA: &str = include_str!("data/opencollection-v1.0.0.json");
-const FULL: &str = include_str!("data/full.yml");
+const FULL: &str = "tests/data/full.yml";
 
 fn assert_valid(collection: &OpenCollection) {
     let schema: serde_json::Value = serde_json::from_str(SCHEMA).unwrap();
@@ -24,7 +24,7 @@ fn assert_valid(collection: &OpenCollection) {
 
 #[test]
 fn full_fixture_validates_against_official_schema() {
-    let collection = OpenCollection::from_yaml(FULL).unwrap();
+    let collection = OpenCollection::load(FULL).unwrap();
     assert_valid(&collection);
 }
 

@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::auth::Auth;
-use crate::common::{Assertion, Description, Scripts, Sequence, Tag, Variable};
+use crate::common::{Assertion, Description, Scripts, Sequence, Source, Tag, Variable};
 
 /// A gRPC metadata entry.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -56,6 +56,9 @@ pub struct GrpcRequest {
     pub runtime: Option<GrpcRequestRuntime>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub docs: Option<String>,
+    /// Where this request was read from; see [`Source`].
+    #[serde(skip)]
+    pub source: Source,
 }
 
 /// gRPC request protocol details.
